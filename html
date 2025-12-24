@@ -1,1 +1,536 @@
 
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>İnteraktif Matematik Pazarı</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #ecfdf5;
+            touch-action: manipulation;
+            user-select: none;
+            overflow: hidden; /* Scroll engelleme */
+        }
+
+        /* Sol Menü Stili */
+        .sidebar-item {
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        .sidebar-item.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-left-color: #fbbf24; /* Amber */
+            font-weight: bold;
+        }
+        .sidebar-item.completed i {
+            color: #4ade80; /* Green */
+        }
+
+        /* Oyun Objeleri */
+        .item {
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            position: relative;
+        }
+        .item:active {
+            transform: scale(0.9);
+        }
+        .item.broken {
+            opacity: 0.6;
+            filter: grayscale(100%) sepia(50%);
+            transform: scale(0.85) rotate(15deg);
+            pointer-events: none; /* Tekrar tıklanamaz */
+        }
+
+        /* Sepet Görünümü */
+        .basket {
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 30 Q 50 100 90 30' fill='%23d97706' stroke='%2392400e' stroke-width='3'/%3E%3Cpath d='M10 30 L 90 30' stroke='%2392400e' stroke-width='3' fill='none'/%3E%3Cpath d='M20 30 Q 50 -10 80 30' stroke='%2392400e' stroke-width='3' fill='none'/%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center bottom;
+        }
+
+        .shelf {
+            background: #a8763e;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-bottom: 8px solid #785226;
+            border-radius: 8px;
+        }
+
+        /* Animasyonlar */
+        @keyframes bounce-in {
+            0% { transform: scale(0); opacity: 0; }
+            60% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-bounce-in {
+            animation: bounce-in 0.5s forwards;
+        }
+
+        .feedback-pop {
+            position: absolute;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #fbbf24;
+            pointer-events: none;
+            text-shadow: 2px 2px 0 #000;
+            animation: floatUp 0.8s forwards;
+            z-index: 100;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-60px); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-row">
+
+    <!-- SOL MENÜ (BÖLÜMLER) -->
+    <div class="w-1/4 max-w-[250px] bg-green-800 text-white flex flex-col shadow-2xl z-20 overflow-y-auto">
+        <div class="p-4 bg-green-900 shadow-md">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fas fa-store"></i> 
+                <span>Matematik Pazarı</span>
+            </h1>
+            <div class="mt-2 text-sm text-green-200">
+                Puan: <span id="score-display" class="font-bold text-white text-lg">0</span>
+            </div>
+        </div>
+        
+        <div id="sidebar-list" class="flex-1 py-2 space-y-1">
+            <!-- JS ile doldurulacak -->
+        </div>
+    </div>
+
+    <!-- OYUN ALANI -->
+    <div class="flex-1 flex flex-col bg-green-50 relative overflow-hidden">
+        
+        <!-- Üst Bilgi (Mobil için Burger menü eklenebilir ama şu an basit tutalım) -->
+        <div class="absolute top-0 right-0 p-4 z-10">
+            <button onclick="restartGame()" class="bg-white/80 p-2 rounded-full hover:bg-white text-green-700 shadow transition">
+                <i class="fas fa-redo"></i> Yeniden Başla
+            </button>
+        </div>
+
+        <!-- Soru ve Yönerge -->
+        <div class="text-center pt-8 px-4 z-10 mt-4">
+            <h2 id="instruction" class="text-3xl font-bold text-gray-800 mb-2 drop-shadow-sm transition-all">
+                Yükleniyor...
+            </h2>
+            <p id="sub-instruction" class="text-green-700 font-medium text-xl bg-green-100/50 inline-block px-4 py-1 rounded-full border border-green-200">
+                <!-- Alt metin -->
+            </p>
+        </div>
+
+        <!-- Ana Sahne -->
+        <div class="flex-1 flex flex-col justify-end pb-4 relative w-full max-w-4xl mx-auto">
+            
+            <!-- Objelerin Duracağı Yer (Raf/Masa) -->
+            <div id="interaction-zone" class="flex justify-center flex-wrap gap-6 p-6 min-h-[200px] items-end mb-4 z-10 transition-all">
+                <!-- Objeler JS ile buraya gelecek -->
+            </div>
+
+            <!-- Hedef Alanı (Sepet veya Sonuç Kutusu) -->
+            <div id="target-zone" class="relative mx-auto w-64 h-48 basket flex justify-center items-end pb-8 transition-all duration-300">
+                <div id="basket-badge" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-4xl font-bold text-white drop-shadow-md bg-green-600 rounded-full w-14 h-14 flex items-center justify-center border-4 border-white shadow-lg">
+                    0
+                </div>
+            </div>
+
+            <!-- Kontrol Butonları -->
+            <div class="bg-white p-4 mx-4 mb-4 rounded-2xl shadow-xl flex justify-center gap-4 z-20 border-b-4 border-green-200">
+                
+                <!-- Standart Görsel Mod Kontrolü -->
+                <div id="controls-visual" class="w-full max-w-md">
+                     <button onclick="checkVisualAnswer()" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold text-xl shadow-[0_4px_0_rgb(21,128,61)] active:shadow-none active:translate-y-1 transition flex items-center justify-center gap-2">
+                        <i class="fas fa-check-circle"></i> TAMAM
+                    </button>
+                </div>
+                
+                <!-- Sayı Girme Modu Kontrolü -->
+                <div id="controls-input" class="hidden flex flex-col gap-2 w-full max-w-md items-center">
+                    <div class="flex gap-2 w-full justify-center items-center">
+                        <span class="text-xl font-bold text-gray-600">Sonuç:</span>
+                        <input type="number" id="manual-input" class="w-32 text-center text-3xl p-2 border-2 border-green-300 rounded-xl focus:outline-none focus:border-green-500 bg-gray-50" placeholder="?">
+                        <button onclick="checkInputAnswer()" class="bg-blue-500 text-white px-8 py-3 rounded-xl font-bold shadow-[0_4px_0_rgb(29,78,216)] active:shadow-none active:translate-y-1 text-lg">
+                            Kontrol
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modallar -->
+    <div id="modal" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-white p-8 rounded-3xl max-w-md w-full text-center shadow-2xl border-4 border-yellow-300 animate-bounce-in relative overflow-hidden">
+            <!-- Konfeti efekti için arka plan -->
+            <div class="absolute inset-0 pointer-events-none overflow-hidden" id="confetti-container"></div>
+            
+            <div class="text-7xl mb-4 transform hover:scale-110 transition cursor-default" id="modal-icon">🎉</div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-2" id="modal-title">Harika!</h2>
+            <p class="text-gray-600 mb-8 text-lg" id="modal-msg">Doğru cevap!</p>
+            
+            <button onclick="nextSection()" class="w-full bg-yellow-400 text-yellow-900 px-8 py-4 rounded-2xl font-bold text-xl shadow-[0_4px_0_rgb(202,138,4)] hover:bg-yellow-500 active:shadow-none active:translate-y-1 transition">
+                Sonraki Bölüme Geç <i class="fas fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- OYUN VERİ YAPISI (BÖLÜMLER VE SORU HAVUZLARI) ---
+        const gameSections = [
+            {
+                id: 'addition',
+                title: 'Toplama (Artma)',
+                icon: 'fa-plus-circle',
+                questions: [
+                    { type: 'add_visual', text: "Sepette 2 elma var. 3 elma daha ekle.", sub: "Elmalara tıklayarak sepete koy.", item: '🍎', start: 2, add: 3 },
+                    { type: 'add_visual', text: "Sepette 1 portakal var. 4 portakal daha ekle.", sub: "Portakalları sepete taşı.", item: '🍊', start: 1, add: 4 },
+                    { type: 'add_visual', text: "Sepette 3 süt var. 2 süt daha ekle.", sub: "Süt şişelerine tıkla.", item: '🥛', start: 3, add: 2 },
+                    { type: 'add_visual', text: "Sepette 4 karpuz var. 1 karpuz daha ekle.", sub: "Karpuzları sepete koy.", item: '🍉', start: 4, add: 1 }
+                ]
+            },
+            {
+                id: 'subtraction',
+                title: 'Çıkarma (Azalma)',
+                icon: 'fa-minus-circle',
+                questions: [
+                    { type: 'sub_visual', text: "6 yumurta vardı, 2 tanesi kırıldı.", sub: "Kırılanlara tıkla!", item: '🥚', brokenItem: '🍳', start: 6, remove: 2 },
+                    { type: 'sub_visual', text: "5 balon vardı, 3 tanesi patladı.", sub: "Balonlara tıkla ve patlat!", item: '🎈', brokenItem: '💥', start: 5, remove: 3 },
+                    { type: 'sub_visual', text: "7 kurabiye vardı, 2 tanesini yedik.", sub: "Yenen kurabiyelere tıkla.", item: '🍪', brokenItem: '😋', start: 7, remove: 2 },
+                    { type: 'sub_visual', text: "4 dondurma vardı, 1 tanesi eridi.", sub: "Eriyen dondurmaya tıkla.", item: '🍦', brokenItem: '🫠', start: 4, remove: 1 }
+                ]
+            },
+            {
+                id: 'zero_concept',
+                title: 'Sıfırın Etkisi',
+                icon: 'fa-genderless',
+                questions: [
+                    { type: 'add_visual', text: "Sepette 3 muz var. 0 (hiç) muz ekle.", sub: "Hiçbir şeye dokunmadan Tamam'a bas.", item: '🍌', start: 3, add: 0 },
+                    { type: 'sub_visual', text: "4 araba var. 0 tanesi gitti (hiç gitmedi).", sub: "Hiçbir şeye dokunmadan Tamam'a bas.", item: '🚗', brokenItem: '💨', start: 4, remove: 0 },
+                    { type: 'sub_visual', text: "3 topun var. 3'ü de patladı! (Hepsini çıkar)", sub: "Hepsine tıkla.", item: '⚽', brokenItem: '💥', start: 3, remove: 3 } // Kalan 0 durumu
+                ]
+            },
+            {
+                id: 'commutation',
+                title: 'Değişme Özelliği',
+                icon: 'fa-exchange-alt',
+                questions: [
+                    // Bu bölümde sorular çiftli gelir (mantık aşağıda işlenir)
+                    { type: 'input_visual', text: "Önce 3, sonra 2 çilek aldık.", sub: "Toplam kaç eder?", item: '🍓', a: 3, b: 2 },
+                    { type: 'input_visual', text: "Yer değiştirdik! Önce 2, sonra 3 çilek.", sub: "Sonuç değişti mi?", item: '🍓', a: 2, b: 3 },
+                    { type: 'input_visual', text: "4 mavi, 1 kırmızı kalem.", sub: "Toplam kaç?", item: '✏️', a: 4, b: 1 },
+                    { type: 'input_visual', text: "1 kırmızı, 4 mavi kalem.", sub: "Şimdi kaç oldu?", item: '✏️', a: 1, b: 4 }
+                ]
+            }
+        ];
+
+        // --- OYUN DURUMU ---
+        let currentSectionIndex = 0;
+        let currentQuestionData = null;
+        let basketValue = 0; // Sepetteki/Kalan anlık sayı
+        let targetValue = 0; // Ulaşılması gereken hedef sayı
+        let score = 0;
+        let isLevelCompleted = false;
+
+        // DOM Elementleri
+        const sidebarList = document.getElementById('sidebar-list');
+        const instructionEl = document.getElementById('instruction');
+        const subInstructionEl = document.getElementById('sub-instruction');
+        const interactionZone = document.getElementById('interaction-zone');
+        const targetZone = document.getElementById('target-zone');
+        const basketBadge = document.getElementById('basket-badge');
+        const controlsVisual = document.getElementById('controls-visual');
+        const controlsInput = document.getElementById('controls-input');
+        const modal = document.getElementById('modal');
+        const scoreDisplay = document.getElementById('score-display');
+        const manualInput = document.getElementById('manual-input');
+
+        // --- BAŞLATMA ---
+        function initGame() {
+            renderSidebar();
+            loadSection(0);
+        }
+
+        function restartGame() {
+            currentSectionIndex = 0;
+            score = 0;
+            scoreDisplay.textContent = score;
+            initGame();
+        }
+
+        // --- SOL MENÜ OLUŞTURMA ---
+        function renderSidebar() {
+            sidebarList.innerHTML = '';
+            gameSections.forEach((section, index) => {
+                const btn = document.createElement('div');
+                btn.className = `sidebar-item p-4 cursor-pointer hover:bg-green-700 flex items-center gap-3 ${index === currentSectionIndex ? 'active' : ''}`;
+                btn.onclick = () => {
+                    // Sadece kilitli değilse veya basit modda her zaman tıklanabilir
+                    loadSection(index);
+                };
+                
+                let statusIcon = index < currentSectionIndex ? '<i class="fas fa-check-circle text-green-400"></i>' : 
+                                (index === currentSectionIndex ? '<i class="fas fa-play-circle text-yellow-400"></i>' : '<i class="fas fa-lock text-gray-400"></i>');
+
+                btn.innerHTML = `
+                    <div class="text-xl w-8 text-center">${statusIcon}</div>
+                    <div class="flex-1">
+                        <div class="font-bold text-sm">${section.title}</div>
+                    </div>
+                `;
+                sidebarList.appendChild(btn);
+            });
+        }
+
+        // --- BÖLÜM YÜKLEME ---
+        function loadSection(index) {
+            currentSectionIndex = index;
+            isLevelCompleted = false;
+            renderSidebar(); // Aktif sınıfını güncellemek için
+            
+            modal.classList.add('hidden'); // Modalı kapat
+            
+            const section = gameSections[index];
+            
+            // Bu bölümden RASTGELE bir soru seç
+            const randomIndex = Math.floor(Math.random() * section.questions.length);
+            currentQuestionData = section.questions[randomIndex];
+
+            // Arayüzü Temizle ve Hazırla
+            interactionZone.innerHTML = '';
+            targetZone.classList.remove('opacity-0', 'opacity-50', 'hidden');
+            manualInput.value = '';
+            
+            // Soru Verilerini Ekrana Bas
+            instructionEl.textContent = currentQuestionData.text;
+            subInstructionEl.textContent = currentQuestionData.sub;
+
+            // Oyun Tipine Göre Sahneyi Kur
+            if (currentQuestionData.type === 'add_visual') {
+                setupAdditionScene();
+            } else if (currentQuestionData.type === 'sub_visual') {
+                setupSubtractionScene();
+            } else if (currentQuestionData.type === 'input_visual') {
+                setupInputScene();
+            }
+        }
+
+        // --- SAHNE KURULUMLARI ---
+
+        function setupAdditionScene() {
+            controlsVisual.classList.remove('hidden');
+            controlsInput.classList.add('hidden');
+            targetZone.classList.remove('hidden');
+
+            const q = currentQuestionData;
+            basketValue = q.start;
+            targetValue = q.start + q.add;
+            
+            updateBasketDisplay();
+
+            // Eklenecek nesneleri rafa diz
+            // Eğer "0 ekle" ise rafa 0 obje konur ama döngü çalışmaz, sorun yok.
+            // Görsel ipucu olarak 0 eklenecekse boş bir tabak koyabiliriz.
+            if (q.add === 0) {
+                 const emptyHint = document.createElement('div');
+                 emptyHint.className = "text-green-700 opacity-50 font-bold border-2 border-dashed border-green-400 p-4 rounded-lg flex flex-col items-center animate-pulse";
+                 emptyHint.innerHTML = "<i class='fas fa-ban text-2xl'></i><span>Eklenecek yok</span>";
+                 interactionZone.appendChild(emptyHint);
+            }
+
+            for (let i = 0; i < q.add; i++) {
+                const el = document.createElement('div');
+                el.className = "item text-6xl shadow-xl bg-white rounded-full p-2 hover:bg-green-100 border-b-4 border-green-200 active:border-b-0 active:translate-y-1";
+                el.innerHTML = q.item;
+                el.onclick = function() {
+                    // Animasyonla sepete git
+                    this.style.transition = "all 0.5s ease-in-out";
+                    this.style.transform = "translate(100px, 150px) scale(0)";
+                    this.style.opacity = "0";
+                    
+                    setTimeout(() => this.remove(), 450); // DOM'dan sil
+                    
+                    basketValue++;
+                    updateBasketDisplay();
+                    createParticles(this, "➕");
+                    playSound('pop');
+                };
+                interactionZone.appendChild(el);
+            }
+        }
+
+        function setupSubtractionScene() {
+            controlsVisual.classList.remove('hidden');
+            controlsInput.classList.add('hidden');
+            targetZone.classList.add('opacity-50'); // Sepet pasif görünsün
+
+            const q = currentQuestionData;
+            basketValue = q.start;
+            targetValue = q.start - q.remove;
+            
+            updateBasketDisplay(); // Başlangıç sayısını göster
+
+            // Tüm nesneleri ortaya diz (Sepettekiler + çıkarılacaklar karışık değil, hepsi bir arada)
+            for (let i = 0; i < q.start; i++) {
+                const el = document.createElement('div');
+                el.className = "item text-6xl animate-bounce-in bg-white p-2 rounded-xl shadow-lg border-b-4 border-gray-300";
+                el.innerHTML = q.item;
+                el.dataset.state = "intact"; // Sağlam
+
+                el.onclick = function() {
+                    if (this.dataset.state === "intact" && basketValue > (q.start - q.remove)) { 
+                        // Sadece hedefe ulaşana kadar kırmaya izin verelim mi? 
+                        // Hayır, çocuk yanlışlıkla fazla kırabilir, bu eğitici olur. 
+                        // Ama basitlik için sınır koymuyoruz, kontrolde bakacağız.
+                        
+                        this.dataset.state = "broken";
+                        this.classList.add('broken');
+                        this.innerHTML = q.brokenItem; // Kırık hali (yumurta -> sahan, balon -> patlak)
+                        
+                        basketValue--;
+                        updateBasketDisplay();
+                        createParticles(this, "➖");
+                        playSound('break');
+                    }
+                };
+                interactionZone.appendChild(el);
+            }
+        }
+
+        function setupInputScene() {
+            controlsVisual.classList.add('hidden');
+            controlsInput.classList.remove('hidden');
+            targetZone.classList.add('hidden'); // Sepeti tamamen gizle
+
+            const q = currentQuestionData;
+            targetValue = q.a + q.b;
+            
+            // Görsel grupları oluştur
+            const container = document.createElement('div');
+            container.className = "flex items-center gap-4 bg-white p-6 rounded-3xl shadow-lg border-2 border-green-100";
+            
+            // Grup A
+            const grpA = document.createElement('div');
+            grpA.className = "flex gap-1 bg-green-50 p-2 rounded-lg border border-green-200";
+            for(let i=0; i<q.a; i++) grpA.innerHTML += `<span class="text-5xl animate-bounce-in" style="animation-delay:${i*100}ms">${q.item}</span>`;
+            
+            // Artı
+            const plus = document.createElement('div');
+            plus.className = "text-4xl font-bold text-gray-400";
+            plus.innerText = "+";
+
+            // Grup B
+            const grpB = document.createElement('div');
+            grpB.className = "flex gap-1 bg-blue-50 p-2 rounded-lg border border-blue-200";
+            for(let i=0; i<q.b; i++) grpB.innerHTML += `<span class="text-5xl animate-bounce-in" style="animation-delay:${(q.a+i)*100}ms">${q.item}</span>`;
+
+            container.appendChild(grpA);
+            container.appendChild(plus);
+            container.appendChild(grpB);
+            
+            interactionZone.appendChild(container);
+            
+            // Input'a odaklan
+            setTimeout(() => manualInput.focus(), 500);
+        }
+
+        // --- KONTROL ---
+
+        function updateBasketDisplay() {
+            basketBadge.textContent = basketValue;
+            // Animasyon
+            basketBadge.classList.add('scale-125');
+            setTimeout(() => basketBadge.classList.remove('scale-125'), 200);
+        }
+
+        function checkVisualAnswer() {
+            // Eğer görsel moddaysak sepet değerine bak
+            if (basketValue === targetValue) {
+                handleSuccess();
+            } else {
+                handleFailure("Sepetteki sayı doğru değil gibi. Tekrar sayalım mı?");
+            }
+        }
+
+        function checkInputAnswer() {
+            const userVal = parseInt(manualInput.value);
+            if (userVal === targetValue) {
+                handleSuccess();
+            } else {
+                handleFailure("Sonuç biraz farklı. Parmaklarınla saymayı dene!");
+            }
+        }
+
+        function handleSuccess() {
+            isLevelCompleted = true;
+            score += 10;
+            scoreDisplay.textContent = score;
+            
+            // Modal İçeriği
+            document.getElementById('modal-title').innerText = getRandomPraise();
+            document.getElementById('modal-msg').innerText = "Harika gidiyorsun! Cevap doğru.";
+            modal.classList.remove('hidden');
+            
+            playSound('win');
+        }
+
+        function handleFailure(msg) {
+            // Titreme efekti
+            const zone = document.getElementById('game-area');
+            zone.classList.add('bg-red-100');
+            setTimeout(() => zone.classList.remove('bg-red-100'), 300);
+            
+            // Uyarı mesajı (basit alert yerine toast olabilirdi ama alert yeterli)
+            alert(msg);
+        }
+
+        function nextSection() {
+            // Bir sonraki bölüme geç (Eğer son bölümdeyse başa dön veya bitir)
+            let nextIndex = currentSectionIndex + 1;
+            if (nextIndex >= gameSections.length) {
+                alert("Tebrikler! Tüm bölümleri bitirdin. Başa dönülüyor.");
+                nextIndex = 0;
+                score = 0;
+            }
+            loadSection(nextIndex);
+        }
+
+        // --- YARDIMCI GÖRSELLER VE SESLER ---
+
+        function createParticles(element, content) {
+            const rect = element.getBoundingClientRect();
+            const el = document.createElement('div');
+            el.className = 'feedback-pop';
+            el.innerHTML = content;
+            el.style.left = (rect.left + 20) + 'px';
+            el.style.top = (rect.top - 20) + 'px';
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 900);
+        }
+
+        function getRandomPraise() {
+            const praises = ["Harika!", "Süpersin!", "Mükemmel!", "Dâhisin!", "Çok İyi!"];
+            return praises[Math.floor(Math.random() * praises.length)];
+        }
+
+        function playSound(type) {
+            // Tarayıcı kısıtlamaları nedeniyle gerçek ses dosyası yok, 
+            // ama buraya simple beep veya mp3 eklenebilir.
+        }
+
+        // Başlangıç
+        initGame();
+
+    </script>
+</body>
+</html>
